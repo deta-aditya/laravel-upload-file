@@ -106,56 +106,12 @@ function nextSeq(state) {
 }
 
 function composeFormData(state) {
-    function entrify(obj) {
-        return Object
-            .entries(obj)
-            .map(item => {
-                const value = item[1]
-                if (isArrayOrObject(value) && !(value instanceof Blob)) {
-                    return [item[0], entrify(value)]
-                } else {
-                    return item
-                } 
-            })
-    }
-
-    function isArrayOrObject(value) {
-        return Array.isArray(value) || (typeof value === 'object' && value !== null)
-    }
-
-    function flattenKeys(entries) {
-        function recursivelyFlattenKeys(key, current) {
-            return current.flatMap(item => {
-                const value = item[1]
-                const nextKey = decideKey(key, item[0])
-                if (Array.isArray(value)) {
-                    return recursivelyFlattenKeys(nextKey, value)
-                } else {
-                    return [[nextKey, item[1]]]
-                }
-            })
-        }
-
-        function decideKey(rootKey, currentKey) {
-            if (rootKey === '') {
-                return currentKey
-            } else if (!isNaN(currentKey)) {
-                return rootKey
-            } else {
-                return `${rootKey}[${currentKey}]`
-            }
-        }
-
-        return recursivelyFlattenKeys('', entries)
-    }
-
-    const links = JSON.stringify(state.links)
-    const uploads = flattenKeys(entrify(state.uploads))
-    // console.log(uploads)
-
     const formData = new FormData()
-    formData.append('links', links)
-    uploads.forEach(([key, value]) => formData.append(key, value))
+    formData.append('links[image_gallery]', JSON.stringify(state.links.image_gallery))
+    formData.append('links[video_link]', state.links.video_link)
+
+    const uploads = state.uploads.flatMap(Object.entries)
+    uploads.forEach(([key, value]) => formData.append(`uploads[${key}][]`, value))
 
     return formData
 }
