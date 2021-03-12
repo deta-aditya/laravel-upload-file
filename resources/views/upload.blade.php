@@ -105,6 +105,61 @@ function nextSeq(state) {
     return result
 }
 
+function composeFormData(state) {
+    function entrify(obj) {
+        return Object
+            .entries(obj)
+            .map(item => {
+                const value = item[1]
+                if (isArrayOrObject(value) && !(value instanceof Blob)) {
+                    return [item[0], entrify(value)]
+                } else {
+                    return item
+                } 
+            })
+    }
+
+    function isArrayOrObject(value) {
+        return Array.isArray(value) || (typeof value === 'object' && value !== null)
+    }
+
+    function flattenKeys(entries) {
+        function recursivelyFlattenKeys(key, current) {
+            return current.flatMap(item => {
+                const value = item[1]
+                const nextKey = decideKey(key, item[0])
+                if (Array.isArray(value)) {
+                    return recursivelyFlattenKeys(nextKey, value)
+                } else {
+                    return [[nextKey, item[1]]]
+                }
+            })
+        }
+
+        function decideKey(rootKey, currentKey) {
+            if (rootKey === '') {
+                return currentKey
+            } else if (!isNaN(currentKey)) {
+                return rootKey
+            } else {
+                return `${rootKey}[${currentKey}]`
+            }
+        }
+
+        return recursivelyFlattenKeys('', entries)
+    }
+
+    const links = JSON.stringify(state.links)
+    const uploads = flattenKeys(entrify(state.uploads))
+    // console.log(uploads)
+
+    const formData = new FormData()
+    formData.append('links', links)
+    uploads.forEach(([key, value]) => formData.append(key, value))
+
+    return formData
+}
+
 // Mutators
 const toggleEditMode = mutator((state, _) => ({ 
     ...state, 
@@ -144,6 +199,7 @@ const reorder = mutator((state, payload) => {
 
 // Elements & Event Handler
 const el = {
+    body: $('body'),
     showModeBar: $('#show-mode-bar'),
     editModeButton: $('#edit-mode-btn'),
     editModeBar: $('#edit-mode-bar'),
@@ -158,6 +214,13 @@ function main() {
 
     el.editModeButton.on('click', () => {
         toggleEditMode()
+    })
+
+    el.saveDraftButton.on('click', async () => {
+        const formData = composeFormData(state)
+        const result = await api.modifyGallery(formData)
+
+        el.body.append(result)
     })
 
     el.cancelDraftButton.on('click', () => {
@@ -177,6 +240,27 @@ function main() {
             reorder(newSeqs)
         }
     })
+}
+
+// APIs
+const api = {
+    async modifyGallery(formData) {
+        try {
+            const result = await $.ajax({
+                url: '/api/attr/villages/current/gallery',
+                type: 'POST',
+                enctype: 'multipart/form-data',
+                data: formData,
+                processData: false,
+                contentType: false,
+                cache: false
+            })
+            
+            return result
+        } catch (error) {
+            console.error(error)
+        }
+    }
 }
 
 // Renderers
